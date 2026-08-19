@@ -97,6 +97,6 @@ Postgres hosting) before making unilateral calls on those.
 - **Commits:** Do not commit code or document changes to git without asking first. Never co-author commits (no `Co-Authored-By` trailer).
 - **Skills:** Disable automatic git commits during TDD execution. Do not use git worktress - ignore `superpowers:using-git-worktrees`. When grilling, ask one question at a time.
 - **Workflow:** (superpowers), two phases:
-  - **Plan phase:** `/brainstorm` to explore and shape the idea, using the `/grill-with-docs` skill during brainstorming to stress-test the design and produce ADRs/glossary as we go, then `/write-plan` to turn it into a written plan.
-  - **Execution phase:** Always create a new branch before implementing a plan, then `/execute-plan` to implement the plan with subagents, then `/code-review` to review the code after implementation. Never co-author commits.
-- **Deployment:** Open a PR against `main` using the `gh` CLI (`gh pr create`). Do not push directly to `main`. Always delete the branch after the PR is merged.
+  - **Plan phase:** Always create a new branch before working on a plan, then use `/brainstorm` to explore and shape the idea, using the `/grill-with-docs` skill during brainstorming to stress-test the design and produce ADRs/glossary as we go, then `/write-plan` to turn it into a written plan.
+  - **Execution phase:** Use `/execute-plan` to implement the plan with subagents, then `/code-review` to review the code after implementation. Never co-author commits.
+- **Deployment:** Open a PR against `main` using the `gh` CLI (`gh pr create`). Always delete the branch after the PR is merged. Never commit directly to `main`
