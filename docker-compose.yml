@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: receipt-splitter-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: receipt_splitter
+      POSTGRES_USER: receipt_splitter
+      POSTGRES_PASSWORD: receipt_splitter
+    ports:
+      - "5432:5432"
+    volumes:
+      - receipt-splitter-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U receipt_splitter -d receipt_splitter"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  receipt-splitter-postgres-data:

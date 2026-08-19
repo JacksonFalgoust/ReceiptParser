@@ -1,0 +1,20 @@
+spring:
+  application:
+    name: receipt-splitter
+  datasource:
+    url: jdbc:postgresql://localhost:5432/receipt_splitter
+    username: receipt_splitter
+    password: receipt_splitter
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+
+server:
+  port: 8080
+
+---
+spring:
+  config:
+    activate:
+      on-profile: test
