@@ -12,6 +12,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -19,14 +20,14 @@ import java.util.Collections;
 import java.util.List;
 
 @Entity
-@Table(name = "bill")
+@Table(name = "bill", uniqueConstraints = @UniqueConstraint(columnNames = "room_code"))
 public class Bill {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "room_code", nullable = false, unique = true, length = 6)
+    @Column(name = "room_code", nullable = false, length = 6)
     private String roomCode;
 
     @Column(name = "payer_name", nullable = false, length = 100)

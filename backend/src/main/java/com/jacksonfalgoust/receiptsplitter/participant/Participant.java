@@ -10,6 +10,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 
 import java.time.Instant;
 
@@ -19,7 +20,8 @@ import java.time.Instant;
  * after a refresh or a dropped WebSocket rather than a login.
  */
 @Entity
-@Table(name = "participant")
+@Table(name = "participant", uniqueConstraints = @UniqueConstraint(
+        columnNames = {"bill_id", "session_token"}))
 public class Participant {
 
     @Id

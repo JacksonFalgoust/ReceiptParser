@@ -61,7 +61,9 @@ the hardest part early instead of leaving it for last.
 - [ ] Confirm draft → persist bill + items, generate room code, status →
       `OPEN`
 - [ ] `GET /api/bills/{roomCode}` — full state fetch (also used for
-      reconnect resync)
+      reconnect resync). Needs a fetch join across
+      `Bill → items/participants → claims`: everything here is
+      `FetchType.LAZY`, so a naive read is a three-level N+1.
 - [ ] Join-room endpoint — create `Participant` + `sessionToken`
 - [ ] Settle-up calculation (computed on read, not stored): per-item price ÷
       claimers, tax/tip distributed proportional to subtotal share, cent
