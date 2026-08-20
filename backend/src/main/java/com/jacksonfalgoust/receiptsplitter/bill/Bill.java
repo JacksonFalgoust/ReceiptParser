@@ -15,6 +15,7 @@ import jakarta.persistence.Table;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 @Entity
@@ -132,8 +133,9 @@ public class Bill {
         return expiresAt;
     }
 
+    /** Read-only view — mutate through {@link #addItem} / {@link #removeItem} so the owning side stays consistent. */
     public List<Item> getItems() {
-        return items;
+        return Collections.unmodifiableList(items);
     }
 
     /** Adds an item and sets the owning side so both halves stay consistent. */
@@ -147,14 +149,20 @@ public class Bill {
         item.setBill(null);
     }
 
+    /** Read-only view — mutate through {@link #addParticipant} / {@link #removeParticipant} so the owning side stays consistent. */
     public List<Participant> getParticipants() {
-        return participants;
+        return Collections.unmodifiableList(participants);
     }
 
     /** Adds a participant and sets the owning side so both halves stay consistent. */
     public void addParticipant(Participant participant) {
         participants.add(participant);
         participant.setBill(this);
+    }
+
+    public void removeParticipant(Participant participant) {
+        participants.remove(participant);
+        participant.setBill(null);
     }
 
     @Override
