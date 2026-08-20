@@ -1,6 +1,7 @@
 package com.jacksonfalgoust.receiptsplitter.bill;
 
 import com.jacksonfalgoust.receiptsplitter.item.Item;
+import com.jacksonfalgoust.receiptsplitter.participant.Participant;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -54,6 +55,9 @@ public class Bill {
 
     @OneToMany(mappedBy = "bill", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Item> items = new ArrayList<>();
+
+    @OneToMany(mappedBy = "bill", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<Participant> participants = new ArrayList<>();
 
     protected Bill() {
         // for JPA
@@ -141,6 +145,16 @@ public class Bill {
     public void removeItem(Item item) {
         items.remove(item);
         item.setBill(null);
+    }
+
+    public List<Participant> getParticipants() {
+        return participants;
+    }
+
+    /** Adds a participant and sets the owning side so both halves stay consistent. */
+    public void addParticipant(Participant participant) {
+        participants.add(participant);
+        participant.setBill(this);
     }
 
     @Override
