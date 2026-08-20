@@ -31,8 +31,6 @@ CREATE TABLE participant (
     UNIQUE (bill_id, session_token)
 );
 
-CREATE INDEX idx_participant_bill_id ON participant (bill_id);
-
 CREATE TABLE item_claim (
     id             BIGSERIAL PRIMARY KEY,
     item_id        BIGINT      NOT NULL REFERENCES item (id) ON DELETE CASCADE,
@@ -43,5 +41,4 @@ CREATE TABLE item_claim (
     UNIQUE (item_id, participant_id, unit_index)
 );
 
-CREATE INDEX idx_item_claim_item_id ON item_claim (item_id);
 CREATE INDEX idx_item_claim_participant_id ON item_claim (participant_id);
