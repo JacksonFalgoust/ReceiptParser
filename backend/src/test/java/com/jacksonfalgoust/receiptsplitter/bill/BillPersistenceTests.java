@@ -47,6 +47,8 @@ class BillPersistenceTests {
         assertThat(reloaded.getTipCents()).isEqualTo(200L);
         assertThat(reloaded.getTotalCents()).isEqualTo(1285L);
         assertThat(reloaded.getStatus()).isEqualTo(BillStatus.OPEN);
+        assertThat(reloaded.getCreatedAt()).isEqualTo(bill.getCreatedAt());
+        assertThat(reloaded.getExpiresAt()).isEqualTo(bill.getExpiresAt());
     }
 
     @Test

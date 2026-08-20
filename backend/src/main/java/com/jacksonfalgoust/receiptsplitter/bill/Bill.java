@@ -165,7 +165,7 @@ public class Bill {
         if (!(o instanceof Bill other)) {
             return false;
         }
-        return id != null && id.equals(other.id);
+        return id != null && id.equals(other.getId());
     }
 
     @Override

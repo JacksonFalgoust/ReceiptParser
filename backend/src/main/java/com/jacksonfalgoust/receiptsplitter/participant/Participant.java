@@ -85,7 +85,7 @@ public class Participant {
         if (!(o instanceof Participant other)) {
             return false;
         }
-        return id != null && id.equals(other.id);
+        return id != null && id.equals(other.getId());
     }
 
     @Override

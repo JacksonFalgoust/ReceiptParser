@@ -94,7 +94,7 @@ public class ItemClaim {
         if (!(o instanceof ItemClaim other)) {
             return false;
         }
-        return id != null && id.equals(other.id);
+        return id != null && id.equals(other.getId());
     }
 
     @Override
