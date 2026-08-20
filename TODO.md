@@ -11,24 +11,24 @@ below is meant to go through `/brainstorm` → `/write-plan` → `/execute-plan`
 ## 1. Open architectural decisions (blocking)
 
 - [ ] Room-code generation scheme (length, charset, collision handling)
+      — format settled (6 chars; digits 2-9 and A-Z minus I/L/O); the
+      generator and its collision retry are still to build
 - [ ] Bill expiry cleanup mechanism (scheduled job vs. lazy delete-on-read)
 - [ ] Postgres hosting for deploy (Railway vs. Render)
 
 ## 2. Backend domain model
 
-- [ ] `Bill` — add `roomCode`, `payerName`, `subtotal`, `tax`, `tip`,
-      `total`, `status` (DRAFT/OPEN/CLOSED), `createdAt`, `expiresAt` +
-      accessors
-      (`backend/src/main/java/com/jacksonfalgoust/receiptsplitter/bill/Bill.java`)
-- [ ] `Item` — `billId`, `name`, `price`, `quantity`
-      (`backend/src/main/java/com/jacksonfalgoust/receiptsplitter/item/Item.java`)
-- [ ] `Participant` — `billId`, `name`, `sessionToken`
-      (`backend/src/main/java/com/jacksonfalgoust/receiptsplitter/participant/Participant.java`)
-- [ ] `ItemClaim` — join table (`itemId`, `participantId`)
-      (`backend/src/main/java/com/jacksonfalgoust/receiptsplitter/claim/ItemClaim.java`)
-- [ ] JPA repositories for each
-- [ ] Update `ScaffoldStubsTests` per its own comment once fields land, and
-      add real entity-level tests
+- [x] `Bill` — `roomCode`, `payerName`, `subtotalCents`, `taxCents`,
+      `tipCents`, `totalCents`, `status` (DRAFT/OPEN/CLOSED), `createdAt`,
+      `expiresAt`; aggregate root owning items and participants
+- [x] `Item` — `bill`, `name`, `priceCents` (line total), `quantity`
+      (number of claimable units)
+- [x] `Participant` — `bill`, `name`, `sessionToken`, `joinedAt`
+- [x] `ItemClaim` — join table (`item`, `participant`, `unitIndex`)
+- [x] JPA repositories for each
+- [x] Flyway `V1` migration; `ddl-auto` switched to `validate`
+- [x] `ScaffoldStubsTests` converted to `DomainMappingTests`; entity-level
+      persistence tests added
 
 ## 3. `ReceiptParser` (core OCR logic)
 
@@ -61,7 +61,9 @@ the hardest part early instead of leaving it for last.
 - [ ] Confirm draft → persist bill + items, generate room code, status →
       `OPEN`
 - [ ] `GET /api/bills/{roomCode}` — full state fetch (also used for
-      reconnect resync)
+      reconnect resync). Needs a fetch join across
+      `Bill → items/participants → claims`: everything here is
+      `FetchType.LAZY`, so a naive read is a three-level N+1.
 - [ ] Join-room endpoint — create `Participant` + `sessionToken`
 - [ ] Settle-up calculation (computed on read, not stored): per-item price ÷
       claimers, tax/tip distributed proportional to subtotal share, cent

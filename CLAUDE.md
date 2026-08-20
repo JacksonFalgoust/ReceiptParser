@@ -4,12 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project status
 
-The project is scaffolded: a Spring Boot backend (`backend/`, Maven), a Vite
-React+TypeScript frontend (`frontend/`), and a `docker-compose.yml` for local
-Postgres all exist and build/boot. There is no domain logic yet — backend
-entities/controllers and frontend routes are empty stubs (see
-`docs/superpowers/plans/2026-08-18-project-scaffolding.md` for what the
-scaffolding pass covered).
+The backend domain model is implemented: Flyway owns the schema
+(`backend/src/main/resources/db/migration/`), Hibernate runs at
+`ddl-auto: validate`, and `Bill`, `Item`, `Participant`, and `ItemClaim`
+are mapped with repositories and persistence tests. Claiming is per unit —
+a line with `quantity > 1` exposes one claim slot per unit via
+`ItemClaim.unitIndex`. There is still no `ReceiptParser` logic, no
+controller behaviour, and no frontend routing; see `TODO.md`.
 
 Local setup (see root `README.md` for details):
 
@@ -18,6 +19,10 @@ docker compose up -d          # Postgres, from repo root
 cd backend && mvn test        # or: mvn spring-boot:run
 cd frontend && npm install && npm run dev
 ```
+
+Flyway migrates on boot. If Flyway reports a non-empty schema without a
+history table, the volume predates the migrations — run
+`docker compose down -v && docker compose up -d` to reset it.
 
 Backend tests are `@SpringBootTest` against the real Postgres container
 above — `docker compose up -d` must be running before `mvn test` will pass.
