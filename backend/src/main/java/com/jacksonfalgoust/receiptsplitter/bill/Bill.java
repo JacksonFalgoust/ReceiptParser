@@ -1,5 +1,7 @@
 package com.jacksonfalgoust.receiptsplitter.bill;
 
+import com.jacksonfalgoust.receiptsplitter.item.Item;
+import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -7,9 +9,12 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "bill")
@@ -46,6 +51,9 @@ public class Bill {
 
     @Column(name = "expires_at", nullable = false)
     private Instant expiresAt;
+
+    @OneToMany(mappedBy = "bill", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<Item> items = new ArrayList<>();
 
     protected Bill() {
         // for JPA
@@ -118,6 +126,21 @@ public class Bill {
 
     public Instant getExpiresAt() {
         return expiresAt;
+    }
+
+    public List<Item> getItems() {
+        return items;
+    }
+
+    /** Adds an item and sets the owning side so both halves stay consistent. */
+    public void addItem(Item item) {
+        items.add(item);
+        item.setBill(this);
+    }
+
+    public void removeItem(Item item) {
+        items.remove(item);
+        item.setBill(null);
     }
 
     @Override
