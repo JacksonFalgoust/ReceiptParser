@@ -71,6 +71,25 @@ This means the API edge needs DTOs rather than serializing entities, and the
 bill-room `GET` needs a fetch join to avoid N+1 — both of which this project
 wants anyway.
 
+### Claiming is per unit, not per line
+
+A receipt line with `quantity > 1` exposes one claim slot per unit, addressed
+by `unit_index` on `ItemClaim`. Three people can each take one of three tacos.
+
+The alternative considered was exploding a `×3` line into three separate
+`Item` rows at parse time, which would leave `ItemClaim` untouched. Rejected
+for two reasons: `$10.00 ÷ 3` forces a rounding decision at parse time, baking
+it into stored data and duplicating logic the settle-up layer already owns;
+and the resulting rows display as `$3.34 / $3.33 / $3.33` for identical items,
+which reads as a bug.
+
+A `units_claimed` count on `ItemClaim` was also considered and rejected: it
+needs an application check that claimed units never exceed `quantity`, which
+is a read-modify-write race in a realtime multi-client app and would require
+optimistic locking to be correct. `unit_index` needs no such check, because
+claiming a specific unit is an insert that the unique constraint either
+accepts or rejects atomically.
+
 ### Room code format: 6 characters, unambiguous alphabet
 
 The alphabet is the digits `2`–`9` plus `A`–`Z` with `I`, `L`, and `O`
@@ -107,7 +126,7 @@ CREATE TABLE item (
     bill_id     BIGINT       NOT NULL REFERENCES bill (id) ON DELETE CASCADE,
     name        VARCHAR(255) NOT NULL,
     price_cents BIGINT       NOT NULL,
-    quantity    INTEGER      NOT NULL DEFAULT 1
+    quantity    INTEGER      NOT NULL DEFAULT 1 CHECK (quantity > 0)
 );
 CREATE INDEX idx_item_bill_id ON item (bill_id);
 
@@ -126,8 +145,9 @@ CREATE TABLE item_claim (
     item_id        BIGINT      NOT NULL REFERENCES item (id) ON DELETE CASCADE,
     participant_id BIGINT      NOT NULL
                    REFERENCES participant (id) ON DELETE CASCADE,
+    unit_index     INTEGER     NOT NULL DEFAULT 0 CHECK (unit_index >= 0),
     claimed_at     TIMESTAMPTZ NOT NULL,
-    UNIQUE (item_id, participant_id)
+    UNIQUE (item_id, participant_id, unit_index)
 );
 CREATE INDEX idx_item_claim_item_id ON item_claim (item_id);
 CREATE INDEX idx_item_claim_participant_id ON item_claim (participant_id);
@@ -135,21 +155,33 @@ CREATE INDEX idx_item_claim_participant_id ON item_claim (participant_id);
 
 Two constraints carry real weight:
 
-- **`UNIQUE (item_id, participant_id)`** makes claiming idempotent in the
-  database. A double-tap or a retried request cannot create duplicate claim
-  rows, which would otherwise corrupt the per-item division in settle-up.
+- **`UNIQUE (item_id, participant_id, unit_index)`** makes claiming idempotent
+  in the database. A double-tap or a retried request cannot create duplicate
+  claim rows, which would otherwise corrupt the per-unit division in
+  settle-up.
 - **`UNIQUE (bill_id, session_token)`** is what makes reconnect work. The same
   browser rejoining a bill resolves to the existing participant instead of
   spawning a duplicate.
 
 ## Field semantics
 
-These three readings are not stated in ARCHITECTURE.md and are fixed here.
+These readings are not stated in ARCHITECTURE.md and are fixed here.
 
 **`price_cents` is the line total, not the unit price.** The parser
 regex-matches the trailing price on a receipt row, which is already the
-extended amount. Consequently `quantity` is informational only: settle-up
-divides `price_cents` by the claimer count and never multiplies by quantity.
+extended amount.
+
+**`quantity` defines how many claim slots a line has.** A line with
+`quantity = 3` exposes units `0`, `1`, and `2`, each independently claimable.
+This is the per-unit claiming model: `"3 TACOS  $10.00"` stays one row and
+displays as `Tacos ×3 — $10.00`, but three people can each take one taco, or
+one person can take all three, or two can share a single unit.
+
+`ItemClaim` still models shared and exclusive claiming without special-casing
+— the grain is just finer. Several rows sharing an `(item_id, unit_index)`
+means that unit is split; a single row means it is owned outright. When
+`quantity = 1`, which is the overwhelmingly common case, `unit_index` is
+always `0` and the model behaves exactly as it would without the column.
 
 **Money columns are `NOT NULL DEFAULT 0`.** This gives up the distinction
 between "the receipt had no tip line" and "the tip was $0.00". That difference
@@ -162,6 +194,52 @@ ARCHITECTURE.md specifies that a parsed draft is returned to the client
 Retaining the value costs nothing and leaves room for server-side draft
 persistence later, but the spec is mildly self-inconsistent here and the
 implementation should not add a code path that writes a `DRAFT` row.
+
+## Consequences of per-unit claiming
+
+### Rounding must stay a single pass
+
+Per-unit claiming introduces a second division: a line splits across its
+units, and each unit splits across its claimers. Rounding at both levels would
+compound the error and could make per-participant totals fail to sum to the
+bill total.
+
+The rule is that no intermediate result is ever rounded. A participant's exact
+share of one item is
+
+```
+price_cents / quantity × Σ (1 / claimers_on_unit)   over each unit they claim
+```
+
+kept as an exact rational. Those rationals accumulate across items, tax and
+tip are applied proportionally as ARCHITECTURE.md requires, and only the final
+per-participant total is floored to whole cents. The difference between the
+bill total and the sum of the floors is the leftover, which goes to the payer —
+exactly the rule ARCHITECTURE.md already states, now applied once at the end
+instead of at each division.
+
+Implementing this belongs to the settle-up task, not this one. It is recorded
+here because it is the reason the model stores a line total and a quantity
+rather than a pre-divided unit price: dividing at parse time would bake
+rounding into stored data and duplicate logic the settle-up layer owns.
+
+### One invariant lives in the application layer
+
+`unit_index` must be less than the parent item's `quantity`, and Postgres
+cannot express that in a `CHECK` constraint because it spans two tables. The
+column constraint stops negatives; the upper bound is the claim endpoint's
+responsibility and belongs to that task's validation and tests.
+
+A trigger or a denormalized copy of `quantity` onto `item_claim` could enforce
+it in the database, but both cost more than the risk justifies for a
+single-writer endpoint that already has to validate the item exists.
+
+### Unclaimed reporting gets finer
+
+ARCHITECTURE.md asks for unclaimed items to be surfaced explicitly. Per-unit
+claiming makes this partial: a `×3` line with two units claimed leaves one
+unit unclaimed, worth `price_cents / quantity`. The unclaimed report is
+computed over units rather than whole lines.
 
 ## Entities
 
@@ -178,7 +256,7 @@ Each entity is mapped in its existing package, replacing the stub comment.
 - **`Participant`** — `@ManyToOne(fetch = LAZY) Bill bill`, plus `name`,
   `sessionToken`, `joinedAt`.
 - **`ItemClaim`** — `@ManyToOne(fetch = LAZY)` to both `Item` and
-  `Participant`, plus `claimedAt`. No collection points at it.
+  `Participant`, plus `unitIndex` and `claimedAt`. No collection points at it.
 
 `equals` / `hashCode` are identity-based on `id` with a constant `hashCode`,
 so an entity's hash does not change when it transitions from transient to
@@ -196,7 +274,7 @@ Only finders with a near-term caller. Each extends `JpaRepository<T, Long>`.
 | | `boolean existsByRoomCode(String)` | room-code generator (next task) |
 | `ParticipantRepository` | `Optional<Participant> findByBillIdAndSessionToken(Long, String)` | join / reconnect |
 | `ItemClaimRepository` | `List<ItemClaim> findByItemBillId(Long)` | room state + settle-up |
-| | `Optional<ItemClaim> findByItemIdAndParticipantId(Long, Long)` | claim / unclaim |
+| | `Optional<ItemClaim> findByItemIdAndParticipantIdAndUnitIndex(Long, Long, int)` | claim / unclaim of one unit |
 | `ItemRepository` | inherited CRUD only | `getReferenceById` when attaching a claim |
 
 `ItemRepository` earns its place without declaring a single custom method: the
@@ -221,9 +299,15 @@ existing suite.
   generated IDs.
 - Removing an item from the collection deletes the row (`orphanRemoval`).
 - Deleting a `Bill` removes its items, participants, and their claims.
-- Inserting a duplicate `(item_id, participant_id)` violates the constraint.
+- Inserting a duplicate `(item_id, participant_id, unit_index)` violates the
+  constraint.
+- The same participant claiming two *different* units of one item succeeds —
+  the constraint must not be so tight that it blocks "I had two of these."
+- Two participants claiming the *same* unit succeeds — a shared unit is legal
+  and is what makes `ItemClaim` model sharing without special-casing.
 - Inserting a duplicate `(bill_id, session_token)` violates the constraint.
 - Inserting a duplicate `room_code` violates the constraint.
+- A negative `unit_index` violates the check constraint.
 - `status` round-trips as a string, verified by reading the raw column.
 - Each repository finder returns the expected row and an empty `Optional` for
   a miss.
@@ -263,7 +347,23 @@ backend/src/main/java/.../participant/Participant.java
 backend/src/main/java/.../claim/ItemClaim.java
 backend/src/test/java/.../ScaffoldStubsTests.java
 TODO.md                            check off section 2
+ARCHITECTURE.md                    ItemClaim grain + settle-up division
 ```
+
+### ARCHITECTURE.md needs two corrections
+
+Per-unit claiming diverges from the source spec in two places, and leaving
+them stale would mislead the settle-up work later:
+
+- The Data Model section describes `ItemClaim` as a join table of
+  `(itemId, participantId)`. It now carries `unitIndex`.
+- The Settle-Up section says "Each item's price ÷ number of claimers on it."
+  The division is now per unit: `price ÷ quantity`, then that unit's share ÷
+  its claimers, with the single-rounding rule described above.
+
+These are edits to the existing prose, not new sections. The rest of
+ARCHITECTURE.md — including the "no special-casing" claim about `ItemClaim`,
+which still holds — stays as written.
 
 ## Execution hazard: the existing local database
 
