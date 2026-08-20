@@ -30,23 +30,31 @@ below is meant to go through `/brainstorm` → `/write-plan` → `/execute-plan`
 - [ ] Update `ScaffoldStubsTests` per its own comment once fields land, and
       add real entity-level tests
 
-## 3. OCR pipeline
+## 3. `ReceiptParser` (core OCR logic)
+
+Build and test this in isolation first — it's pure text-fragment-in,
+structured-data-out logic with no Vision API or HTTP involved, and it's
+called out in the spec as the highest-value, most-ownable piece of code in
+the project. Proving it out before wiring a controller around it de-risks
+the hardest part early instead of leaving it for last.
+
+- [ ] `ReceiptParser` — group text fragments into rows by y-coordinate,
+      regex-match trailing price per row, route subtotal/tax/tip/total/change
+      keyword rows into `Bill` fields, discard unpriced rows
+      (`backend/src/main/java/com/jacksonfalgoust/receiptsplitter/receipt/ReceiptParser.java`)
+- [ ] JUnit fixtures: capture real Vision API output from a handful of
+      receipt formats, test `ReceiptParser` against them test-first, before
+      the controller below exists
+
+## 4. Receipt upload & Vision integration
 
 - [ ] Google Cloud Vision API project/service account setup, key kept
       server-side only
-- [ ] `ReceiptParser` — the core owned logic: group text fragments into rows
-      by y-coordinate, regex-match trailing price per row, route
-      subtotal/tax/tip/total/change keyword rows into `Bill` fields, discard
-      unpriced rows
-      (`backend/src/main/java/com/jacksonfalgoust/receiptsplitter/receipt/ReceiptParser.java`)
 - [ ] `ReceiptController` — `POST /api/bills` multipart upload → Vision call
       → parser → return editable draft (not yet persisted)
       (`backend/src/main/java/com/jacksonfalgoust/receiptsplitter/receipt/ReceiptController.java`)
-- [ ] JUnit fixtures: capture real Vision API output from a handful of
-      receipt formats, test `ReceiptParser` against them (highest-value test
-      target in the project)
 
-## 4. Bill/claims REST API
+## 5. Bill/claims REST API
 
 `backend/src/main/java/com/jacksonfalgoust/receiptsplitter/bill/BillController.java`
 
@@ -55,21 +63,22 @@ below is meant to go through `/brainstorm` → `/write-plan` → `/execute-plan`
 - [ ] `GET /api/bills/{roomCode}` — full state fetch (also used for
       reconnect resync)
 - [ ] Join-room endpoint — create `Participant` + `sessionToken`
-- [ ] `POST /api/bills/{roomCode}/claims` — persist `ItemClaim`, then
-      trigger broadcast
 - [ ] Settle-up calculation (computed on read, not stored): per-item price ÷
       claimers, tax/tip distributed proportional to subtotal share, cent
-      rounding to payer, unclaimed items surfaced explicitly
+      rounding to payer, unclaimed items surfaced explicitly — independent
+      pure logic, build and unit-test before wiring the claim endpoint below
+- [ ] `POST /api/bills/{roomCode}/claims` — persist `ItemClaim`, then
+      trigger broadcast
 - [ ] `@SpringBootTest` coverage for claim/calculation logic
 
-## 5. Realtime sync
+## 6. Realtime sync
 
 - [ ] `BillWebSocketConfig` — STOMP broker, topic `/topic/bills/{roomCode}`
       (`backend/src/main/java/com/jacksonfalgoust/receiptsplitter/websocket/BillWebSocketConfig.java`)
 - [ ] Broadcast claim diffs from the claim endpoint to that topic (write
       path stays REST-only, never over the socket)
 
-## 6. Frontend
+## 7. Frontend
 
 - [ ] `UploadReceipt` — photo capture/upload, call `POST /api/bills`
       (`frontend/src/routes/UploadReceipt.tsx`)
@@ -86,7 +95,7 @@ below is meant to go through `/brainstorm` → `/write-plan` → `/execute-plan`
 - [ ] Vitest + Testing Library component tests for the claiming interaction
 - [ ] Replace/extend the placeholder `App.test.tsx`
 
-## 7. Deployment
+## 8. Deployment
 
 CI is in place (see
 [the CI/CD spec](docs/superpowers/specs/2026-08-19-ci-cd-pipeline-design.md)):
@@ -104,16 +113,16 @@ remains is pointing a host at that image.
       shipped to the client
 - [ ] Add the deploy job to `ci.yml`, gated on the `docker` job succeeding
 
-## 8. Optional polish
+## 9. Optional polish
 
 - [ ] One Playwright happy-path smoke test end-to-end
 
-## 9. CI/CD follow-ups
+## 10. CI/CD follow-ups
 
 Deliberately deferred when the pipeline was built. Roughly in the order
 they become worth doing.
 
-**Blocked on real tests existing (sections 2–6):**
+**Blocked on real tests existing (sections 2–7):**
 
 - [ ] Coverage thresholds — add `jacoco:check` rules and Vitest
       `coverage.thresholds` once `ReceiptParser` has its Vision fixtures.
@@ -122,10 +131,10 @@ they become worth doing.
 - [ ] Publish coverage somewhere visible — Codecov, or an HTML report
       pushed to GitHub Pages. Adds an external dependency and a token, so
       it only pays for itself once the number means something.
-- [ ] Playwright happy-path smoke test in CI (see section 8) — needs the
+- [ ] Playwright happy-path smoke test in CI (see section 9) — needs the
       full stack running in the workflow, so it lands after deployment.
 
-**Blocked on deployment (section 7):**
+**Blocked on deployment (section 8):**
 
 - [ ] Deploy job consuming the GHCR image, gated on `docker` succeeding.
 - [ ] Post-deploy smoke check against the live URL, so a green pipeline
