@@ -88,11 +88,71 @@ below is meant to go through `/brainstorm` → `/write-plan` → `/execute-plan`
 
 ## 7. Deployment
 
-- [ ] Backend + Postgres → Railway or Render (per decision in section 1)
-- [ ] Frontend → Vercel/Netlify
+CI is in place (see
+[the CI/CD spec](docs/superpowers/specs/2026-08-19-ci-cd-pipeline-design.md)):
+every PR runs both test suites with coverage plus CodeQL, and every merge to
+`main` publishes `ghcr.io/jacksonfalgoust/receiptparser-backend`. What
+remains is pointing a host at that image.
+
+- [ ] Backend → Railway or Render (per decision in section 1), pulling the
+      published GHCR image rather than building from source
+- [ ] Postgres instance on the same host, with `SPRING_DATASOURCE_URL`,
+      username, and password injected as environment variables
+- [ ] Frontend → Vercel or Netlify, with `VITE_API_BASE_URL` pointed at the
+      deployed backend
 - [ ] Vision API key and DB creds as server-side env vars/secrets, never
       shipped to the client
+- [ ] Add the deploy job to `ci.yml`, gated on the `docker` job succeeding
 
 ## 8. Optional polish
 
 - [ ] One Playwright happy-path smoke test end-to-end
+
+## 9. CI/CD follow-ups
+
+Deliberately deferred when the pipeline was built. Roughly in the order
+they become worth doing.
+
+**Blocked on real tests existing (sections 2–6):**
+
+- [ ] Coverage thresholds — add `jacoco:check` rules and Vitest
+      `coverage.thresholds` once `ReceiptParser` has its Vision fixtures.
+      A threshold against today's stub code would be arbitrary; one set to
+      0% is theater.
+- [ ] Publish coverage somewhere visible — Codecov, or an HTML report
+      pushed to GitHub Pages. Adds an external dependency and a token, so
+      it only pays for itself once the number means something.
+- [ ] Playwright happy-path smoke test in CI (see section 8) — needs the
+      full stack running in the workflow, so it lands after deployment.
+
+**Blocked on deployment (section 7):**
+
+- [ ] Deploy job consuming the GHCR image, gated on `docker` succeeding.
+- [ ] Post-deploy smoke check against the live URL, so a green pipeline
+      means "it is actually serving", not just "it built".
+- [ ] Staging environment and a manual promotion gate to production.
+
+**Not blocked — can be done any time:**
+
+- [ ] Dependabot (`.github/dependabot.yml`) for three ecosystems: `maven`
+      in `/backend`, `npm` in `/frontend`, and `github-actions` in `/`.
+      The third matters most — it is what stops the pinned action versions
+      from silently going stale.
+- [ ] Branch protection on `main`: require the `Backend tests`,
+      `Frontend checks`, and both `Analyze` checks to pass before merge.
+      This is a repo setting, not a file, so it cannot be committed.
+- [ ] Testcontainers for the backend suite, replacing the Postgres service
+      container and removing the "`docker compose up -d` must be running"
+      precondition for local `mvn test` too. Genuinely better than the
+      current setup; kept out of the CI change because it is application
+      config, not pipeline config.
+- [ ] Pin actions by commit SHA instead of major tag, for supply-chain
+      hardening. Dependabot can keep the SHAs current.
+- [ ] Container image scanning (Trivy or Grype) on the built image, and
+      SBOM generation via `docker/build-push-action`'s `sbom: true`.
+      CodeQL covers source; neither covers the base image's OS packages.
+- [ ] Multi-arch image (`linux/amd64,linux/arm64`) via QEMU + Buildx —
+      only needed if the chosen host runs ARM.
+- [ ] Release tagging: semver tags on `main` producing versioned image
+      tags alongside `sha-` and `latest`.
+- [ ] Enable secret scanning and push protection in repo settings.
