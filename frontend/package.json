@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "coverage": "vitest run --coverage",
     "lint": "oxlint",
     "preview": "vite preview",
     "test": "vitest run"
@@ -27,6 +28,7 @@
     "@types/react-dom": "^19.2.3",
     "@types/sockjs-client": "^1.5.4",
     "@vitejs/plugin-react": "^6.0.4",
+    "@vitest/coverage-v8": "^4.1.11",
     "jsdom": "^29.1.1",
     "oxlint": "^1.75.0",
     "typescript": "~6.0.2",
