@@ -11,7 +11,7 @@ import java.util.stream.Collectors;
 import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest
-class ScaffoldStubsTests {
+class DomainMappingTests {
 
     @Autowired
     private EntityManager entityManager;
@@ -24,6 +24,7 @@ class ScaffoldStubsTests {
 
         // Update this list when adding a new @Entity class — this assertion is
         // intentionally exact, not a "contains at least" check.
-        assertThat(entityNames).containsExactlyInAnyOrder("Bill", "Item", "Participant", "ItemClaim");
+        assertThat(entityNames)
+                .containsExactlyInAnyOrder("Bill", "Item", "Participant", "ItemClaim");
     }
 }

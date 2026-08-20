@@ -56,9 +56,11 @@ client.
 - **Participant** — id, billId, name, sessionToken (random ID stored
   client-side so a page refresh/reconnect re-identifies the same person
   without login)
-- **ItemClaim** — join table (itemId, participantId). A shared item simply
-  has multiple `ItemClaim` rows; an exclusively-owned item has one. This one
-  table models both cases without special-casing.
+- **ItemClaim** — join table (itemId, participantId, unitIndex). A line with
+  `quantity > 1` exposes one claim slot per unit, so three people can each
+  take one of three tacos. Several rows sharing an (itemId, unitIndex) mean
+  that unit is split between them; a single row means it is owned outright.
+  This one table models both cases without special-casing.
 
 ## Receipt OCR & Parsing Pipeline
 
@@ -102,15 +104,18 @@ client.
 Computed on read (not stored), so it's always consistent with current claim
 state:
 
-1. Each item's price ÷ number of claimers on it = that item's per-claimer
-   share.
+1. Each item's price ÷ its quantity = one unit's price; that unit's price ÷
+   the number of claimers on it = each claimer's share of that unit.
 2. Sum a participant's shares across all claimed items → their subtotal
    share.
 3. Tax and tip are distributed **proportionally to each participant's
    subtotal share** (not split evenly) — someone who ordered more food pays
    a proportionally larger slice of tax/tip.
-4. **Rounding:** all math done in cents; any leftover cent(s) from rounding
-   are assigned to the payer.
+4. **Rounding:** all math is done in cents, and no intermediate result is
+   rounded — per-unit and per-claimer shares stay exact until the end, or the
+   two divisions would compound their error. Only each participant's final
+   total is floored to whole cents; the leftover between the bill total and
+   the sum of those floors goes to the payer.
 5. **Unclaimed items:** surfaced explicitly in the UI (e.g. "2 items
    unclaimed — $6.50") rather than silently redistributed across everyone.
 6. Output: per-participant `name → owes $X.XX to <payer>`. Single-payer,
